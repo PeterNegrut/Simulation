@@ -19,7 +19,13 @@ import pychrono as chrono
 import pychrono.irrlicht as chronoirr
 import pychrono.robot as robosimian
 
-SHOW_COLLISION = True  # render collision geometry instead of visual meshes
+# Overlay wireframe collision shapes + contact normals on the render. This build
+# (PyChrono 9.0.1) cannot use RoboSimian.SetVisualizationType*(COLLISION): the SWIG
+# wrapper exposes the setters but not the robosimian VisualizationType enum values
+# they require, so they are uncallable. Irrlicht's EnableCollisionShapeDrawing is
+# strictly better for verification anyway: it draws the *actual* collision geometry
+# of every body (robot AND terrain), and EnableContactDrawing shows live contacts.
+SHOW_COLLISION = True
 
 duration_pose = 1.0          # time to assume the initial pose before terrain exists
 duration_settle_robot = 0.5  # time to let it settle on terrain before walking starts
@@ -68,12 +74,6 @@ sys.SetGravitationalAcceleration(chrono.ChVector3d(0, 0, -9.8))
 robot = robosimian.RoboSimian(sys, True, True)
 robot.Initialize(chrono.ChCoordsysd(chrono.ChVector3d(0, 0, 0), chrono.QuatFromAngleX(chrono.CH_PI)))
 
-if SHOW_COLLISION:
-    robot.SetVisualizationTypeChassis(chrono.VisualizationType_COLLISION)
-    robot.SetVisualizationTypeSled(chrono.VisualizationType_COLLISION)
-    robot.SetVisualizationTypeLimbs(chrono.VisualizationType_COLLISION)
-    robot.SetVisualizationTypeWheels(chrono.VisualizationType_COLLISION)
-
 driver = robosimian.RS_Driver(
     "",
     chrono.GetChronoDataFile("robot/robosimian/actuation/walking_cycle.txt"),
@@ -103,6 +103,10 @@ vis.AddSkyBox()
 vis.AddCamera(chrono.ChVector3d(1, -2.75, 0.2), chrono.ChVector3d(1, 0, 0))
 vis.AddLight(chrono.ChVector3d(100, 100, 100), 290)
 vis.AddLight(chrono.ChVector3d(100, -100, 80), 190)
+
+if SHOW_COLLISION:
+    vis.EnableCollisionShapeDrawing(True)
+    vis.EnableContactDrawing(chronoirr.ContactsDrawMode_CONTACT_NORMALS)
 
 contact_container = sys.GetContactContainer()
 time_step = 1e-3
