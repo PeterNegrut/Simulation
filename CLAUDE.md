@@ -16,8 +16,23 @@ terrain in the robosimian scripts.
 - `sims/robot/` — the staged RoboSimian terrain pipeline (see below)
 - `sims/urdf/` — URDF import diagnostics; `robosimian_urdf_diagnostic.py` proves
   why raw URDF import can't walk (no driver, no tuned collision)
+- `sims/simulate_terrain.py` — Blender practice terrain (terrain/steps/rubble/
+  ramp/pipes/hurdles .obj) + LimX WL_P311D wheel-legged quadruped imported via
+  `pychrono.parsers.ChParserURDF`. `--headless` runs the smoke test. Robot holds
+  its URDF zero pose (all joints POSITION-actuated at 0). Regression baseline —
+  do not modify
+- `sims/simulate_terrain_nav.py` — scripted waypoint navigation on that terrain:
+  wheels SPEED-actuated (ChFunctionSetpoint), legs still position-held, skid-
+  steer waypoint controller, per-course routes, diagnostics + failure gates.
+  `--course flat|pipes|ramp|rubble|mixed|all`, `--calibrate-wheels`, exit code
+  0/1 = PASS/FAIL. Results with legs frozen: flat PASS, rubble PASS (only via
+  the mapped rock-free seam — south edge is 16-37 cm rocks), mixed corridor
+  PASS; pipes & ramp FAIL (see WL_P311D mobility notes)
 - `sims/assets/` — .obj meshes (Blender exports; star/cube are flat cutouts in
-  the X-Z plane extruded along Y — swap Y/Z to stand them upright)
+  the X-Z plane extruded along Y — swap Y/Z to stand them upright). Terrain
+  course meshes span x,y ∈ [-10,10], flat start zone at (0,-8), obstacles up to
+  z≈1.4. `robots/WL_P311D/` is the vendored LimX robot description (URDF + STL,
+  from github.com/limxdynamics/robot-description)
 
 ## RoboSimian staged terrain pipeline
 
@@ -48,6 +63,24 @@ contact count range, NaN check). Trust those numbers, not the render.
 - stall signature: displacement freezes at the wheel-vs-face contact geometry
   (x_edge − sqrt(r² − (r−h)²)), avg speed decays ~1/t, pitch stays flat
 
+## WL_P311D measured mobility (legs frozen at URDF zero, NSC + Bullet + BB, dt=1e-3)
+
+- wheel joints: +speed drives BACKWARD → `WHEEL_SIGNS = -1` on all four
+  (calibrated: raw +2 rad/s = 0.76 m back in 3 s = perfect rolling, no slip)
+- standing height 0.30 m at zero pose; wheel radius 0.127 m; ~44 kg
+- **hard wall: any sharp rise ≥ wheel radius (0.127 m) is unclimbable** even
+  with unlimited motor torque (speed motors are constraints) — geometry, not
+  torque. Pipes (0.17 m crown, mu=0.5) stall square-on at 0.35 m/s; a 0.7 m/s
+  momentum entry rolls it to -62° and tips. Same wall as RoboSimian drive mode.
+- ramp.obj FLOATS: top surface starts z=0.30 over terrain z≈0.13 → 0.17 m
+  entry lip is the blocker, not the 17° slope (fine at mu=0.7)
+- oblique obstacle entry is what tips the robot (88° roll on angled pipe
+  contact); turn-in-place when |yaw err| > 0.45 rad keeps entries square and
+  cut lateral tracking drift from ±0.86 m to ±0.18 m
+- smooth terrain hills (6-9°) climb fine; rubble passable only on routes with
+  rocks < 0.13 m — map the mesh (max rock z above local terrain per cell) and
+  route through the seams
+
 ## PyChrono 9.0.1 API gotchas (all hit and verified this project)
 
 - `pychrono.robot` has **no `ChRobotActuation`** — that's the Chrono ≥9.1 rename
@@ -73,6 +106,21 @@ contact count range, NaN check). Trust those numbers, not the render.
   the settled feet (`GetWheelPos(FR).z − 0.15`), then the chassis is released.
   Verify the floor extends under the WHOLE planned path — a too-short floor made
   the robot drive off the edge and fall 1200 m (caught by the clearance log)
+- `pychrono.parsers.ChParserURDF` EXISTS in this build and works, but:
+  (a) it can't resolve `package://` mesh URIs — rewrite them to local paths in a
+  generated copy of the URDF first (see `resolved_urdf_path()` in
+  `simulate_terrain.py`); (b) **it leaves `EnableCollision` off on every
+  imported body** even though it builds the collision shapes — robots silently
+  fall through the floor until you re-enable it per body; (c) zero-inertia
+  frame links (e.g. `*_foot`) print warnings but simulate fine;
+  (d) `GetCollisionModel()` returns None for bodies with no collision geometry;
+  (e) `GetChMotor()` returns the `ChLinkMotor` base — don't cast to set the
+  setpoint, just keep your own reference to the `ChFunctionSetpoint` you
+  installed via `SetMotorFunction` and call `SetSetpoint(v, t)` on it
+- `ChTriangleMeshConnected.GetCoordsVertices()` is a live view into the mesh —
+  keep the mesh object alive while reading it, or it silently reads as empty
+- Killing a windowed sim from PowerShell: `Stop-Process` on the `conda` wrapper
+  leaves the python child alive — find it via Win32_Process CommandLine match
 
 ## Conventions
 
