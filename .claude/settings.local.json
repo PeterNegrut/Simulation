@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"C:\\\\Users\\\\pnegr\\\\anaconda3\\\\condabin\\\\conda.bat\" env remove -n chrono-urdf -y)",
+      "PowerShell(& \"C:\\\\Users\\\\pnegr\\\\anaconda3\\\\condabin\\\\conda.bat\" install -n pychrono-sim -c conda-forge pychrono numpy matplotlib ipykernel -y)"
+    ]
+  }
+}

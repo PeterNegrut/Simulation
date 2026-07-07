@@ -1,0 +1,15 @@
+# Human-readable summary of intent. The conda solver cannot actually resolve this spec
+# from scratch (the bochengzou pychrono build pins glfw>=3.5.0, which conda-forge's
+# current index doesn't surface) -- use environment.lock.txt to recreate the env.
+name: pychrono-sim
+channels:
+  - bochengzou
+  - nvidia
+  - dlr-sc
+  - conda-forge
+dependencies:
+  - python=3.12
+  - pychrono=9.0.1=py312h84d2775_0
+  - numpy
+  - matplotlib
+  - ipykernel
