@@ -55,6 +55,23 @@ terrain in the robosimian scripts.
   corner berms; drivable corridor |y| ∈ [2, 12.6]. Closed ChBezierCurve
   stadium loop (straights y=±7.5, r=7.5 turns at x=±16.5), same
   ChPathFollowerDriver. PASSED: 2 laps @ 5 m/s, 22.0 s/lap, xte ≤ 1.61 m
+- `sims/vehicle/simulate_hmmwv.py` — HMMWV_Full gauntlet on the 64x16 m
+  Blender course (`../mesh-trainer/blender/hmmwv-course.blend` →
+  `assets/hmmwv_course_collision.obj` as RigidTerrain mesh patch, scale 1;
+  `hmmwv_course_visual.obj` is scenery-only, no collision). SMC, AWD, Pitman
+  arm, chassis collision NONE, demo_VEH_HMMWV config. Zones west→east:
+  start_flat / moguls / trench / off_camber / hill_ledge / boulders /
+  mud_basin / finish_flat. Windowed = interactive W/S/A/D (`--throttle` is
+  IGNORED there); `--scripted` = watch the autonomous throttle run in the
+  window; `--headless` = scripted, no Irrlicht. Scripted driving uses
+  settle+ramp then constant throttle, with stall & rollover detection.
+  Window closed / duration reached in a windowed mode → MANUAL_END (exit 0).
+  MEASURED baselines (exit 0): tmeasy 0.20→EXPECTED_STALL at ledge,
+  0.30/0.50→EXPECTED_FLIP at ledge (30 km/h @ 0.50); `--tire rigid`
+  0.30→PASS_COURSE in 16 s (climbs the ledge). The TMEASY/RIGID ledge split
+  is a force-element artifact: TMEASY reads a near-vertical face as sudden
+  contact-patch penetration and launches the vehicle; RIGID resolves real
+  Bullet contacts and climbs. First vehicle-course baseline — don't modify
 - `sims/assets/` — .obj meshes (Blender exports; star/cube are flat cutouts in
   the X-Z plane extruded along Y — swap Y/Z to stand them upright). Terrain
   course meshes span x,y ∈ [-10,10], flat start zone at (0,-8), obstacles up to
