@@ -4,3 +4,4 @@ output/
 .ipynb_checkpoints/
 *.dat
 robot_resolved.urdf
+upkie_resolved.urdf

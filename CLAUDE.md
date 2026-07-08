@@ -28,11 +28,30 @@ terrain in the robosimian scripts.
   0/1 = PASS/FAIL. Results with legs frozen: flat PASS, rubble PASS (only via
   the mapped rock-free seam — south edge is 16-37 cm rocks), mixed corridor
   PASS; pipes & ramp FAIL (see WL_P311D mobility notes)
+- `sims/upkie_flat.py` — Upkie wheeled biped (vendored `upkie_description`
+  URDF) balancing and driving on flat ground. Hips/knees position-held at the
+  URDF zero pose; wheels SPEED-actuated by a cascade balance controller
+  (pitch error → base-accel command → integrated wheel-velocity setpoint,
+  pitch-reference trim from the measured CoM offset, differential speed damps
+  yaw). `--headless` (exit 0/1 = PASS/FAIL), `--calibrate-wheels` (kinematic
+  sign test). PASSED: 4.4 m travel, pitch within [-1.1°, +3.7°], y-drift
+  28 mm. See "Upkie measured" below — the failure modes found on the way are
+  all documented gotchas now
+- `sims/vehicle/gator_flat.py` — repo-style port of the installed
+  `pychrono.vehicle` demos (demo_VEH_Gator.py + demo_VEH_SteeringController.py):
+  built-in Gator model (no URDF), RigidTerrain, `ChPathFollowerDriver` PID
+  steering + cruise control. `--headless`, `--path dlc|straight`, `--speed`,
+  `--tend`; exit code 0/1 = PASS/FAIL. Both paths PASS at 8 m/s (ends the run
+  at the last path point — past an open path's end the steering target freezes
+  and the vehicle circles back)
 - `sims/assets/` — .obj meshes (Blender exports; star/cube are flat cutouts in
   the X-Z plane extruded along Y — swap Y/Z to stand them upright). Terrain
   course meshes span x,y ∈ [-10,10], flat start zone at (0,-8), obstacles up to
   z≈1.4. `robots/WL_P311D/` is the vendored LimX robot description (URDF + STL,
-  from github.com/limxdynamics/robot-description)
+  from github.com/limxdynamics/robot-description); `robots/upkie_description/`
+  is the vendored Upkie wheeled-biped description (github.com/upkie); both
+  `*_resolved.urdf` files are generated (absolute local mesh paths, patched
+  inertias) — don't commit them
 
 ## RoboSimian staged terrain pipeline
 
@@ -81,6 +100,28 @@ contact count range, NaN check). Trust those numbers, not the render.
   rocks < 0.13 m — map the mesh (max rock z above local terrain per cell) and
   route through the seams
 
+## Upkie measured (wheeled biped, NSC + Bullet + BB@2000 iters, dt=1e-3)
+
+- 5.34 kg, wheel radius 0.05 m, standing wheel-center height 0.493 m below
+  base+0.507; CoM 0.314 m above ground and **6 mm BEHIND the axle** at zero
+  pose → equilibrium is a ~1.1° forward lean; balance to pitch 0 and it
+  walks itself over backward. Compute the trim from body masses, don't guess
+- wheel signs (kinematic test): left −1, right +1 — the mirrored legs need
+  OPPOSITE signs, unlike WL_P311D's uniform −1
+- **TORQUE wheel motors are unusable for balance here**: wheel inertia is
+  1.4e-4 kg·m², so any clamp-level torque (1.7 N·m) spins the wheel at
+  ~12000 rad/s², traction scrubs off within 20 ms, contacts drop to zero and
+  the robot flips. SPEED motors (constraints) + cascade control (pitch error
+  → base-accel → integrated velocity setpoint) balance robustly with the
+  same solver stack
+- balance gains that PASS: KP=25 m/s²/rad, KD=6, lean-per-velocity 0.06,
+  lean-per-position 0.03, accel clamp 4 m/s², speed clamp 1.5 m/s (v
+  overshoots a 0.5 m/s command to ~0.69 m/s — the outer lean loop is soft)
+- never sign-calibrate a self-balancing robot by driving on the ground: it
+  tips during the test and the idle speed-locked wheel brakes; two ground
+  tests gave two different WRONG answers. Fix the root in the air and read
+  the tire's world angular velocity instead (spin about +y = rolls +x)
+
 ## PyChrono 9.0.1 API gotchas (all hit and verified this project)
 
 - `pychrono.robot` has **no `ChRobotActuation`** — that's the Chrono ≥9.1 rename
@@ -119,6 +160,29 @@ contact count range, NaN check). Trust those numbers, not the render.
   installed via `SetMotorFunction` and call `SetSetpoint(v, t)` on it
 - `ChTriangleMeshConnected.GetCoordsVertices()` is a live view into the mesh —
   keep the mesh object alive while reading it, or it silently reads as empty
+- `VisualizationType_*` enums live in `pychrono` core, NOT `pychrono.vehicle`,
+  in this build — the shipped vehicle demos say `veh.VisualizationType_MESH`
+  and fail with AttributeError; use `chrono.VisualizationType_MESH`
+- TMEASY tires compute forces from terrain queries, not the collision system —
+  `GetNumContacts()` staying 0 on a driving wheeled vehicle is normal
+- **Bodies added after the first `DoStepDynamics` never get bound into the
+  Bullet collision world** — a floor created mid-run gives 0 contacts forever
+  and things fall through it. Create all collision bodies before stepping
+  (the WL_P311D "terrain under settled feet" flow only worked because terrain
+  was added before stepping began)
+- URDF links with an exactly-zero inertia tensor (virtual frame links) crash
+  this build at parse when one is the ROOT — patch them to 1e-6 in the
+  generated resolved URDF copy
+- don't blanket-`EnableCollision` every imported URDF body: descriptions like
+  Upkie's have collision shapes that overlap between welded neighbors
+  (tire/hub, rotor/stator, battery inside torso), producing ~150 permanent
+  self-contacts that tear the joints apart — symptom is the robot "free
+  falling" limb by limb while constraints report active. Enable collision
+  only on bodies that must touch the world
+- BB solver iterations scale with constraint count/conditioning: 150 iters
+  is fine for WL_P311D (21 bodies) but lets Upkie's 41-body, 34-fixed-joint,
+  gram-scale-link chain drift apart (looks identical to broken joints);
+  2000 iters holds it exactly
 - Killing a windowed sim from PowerShell: `Stop-Process` on the `conda` wrapper
   leaves the python child alive — find it via Win32_Process CommandLine match
 
