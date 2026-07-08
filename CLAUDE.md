@@ -44,6 +44,17 @@ terrain in the robosimian scripts.
   `--tend`; exit code 0/1 = PASS/FAIL. Both paths PASS at 8 m/s (ends the run
   at the last path point — past an open path's end the steering target freezes
   and the vehicle circles back)
+- `sims/vehicle/gator_track.py` — Gator lapping the Blender racetrack from
+  `../mesh-trainer/blender/gator-track.blend`, exported to
+  `assets/gator_track_collision.obj` (terrain only, RigidTerrain mesh patch)
+  + `gator_track_visual.obj` (terrain + visual-only cones/rocks/tirewalls/
+  trees). Exported at **3x scale** with Z-up preserved (`up_axis='Z'`,
+  `forward_axis='Y'`, `global_scale=3`): at scale 1 the 20x10 m track's turns
+  (~2.5 m) are under the Gator's ~6 m min turn radius. Track layout (scaled):
+  flat road z~0, bump ridge along y=0 x∈[-13.5,15], curbs on ±x edges, ~0.9 m
+  corner berms; drivable corridor |y| ∈ [2, 12.6]. Closed ChBezierCurve
+  stadium loop (straights y=±7.5, r=7.5 turns at x=±16.5), same
+  ChPathFollowerDriver. PASSED: 2 laps @ 5 m/s, 22.0 s/lap, xte ≤ 1.61 m
 - `sims/assets/` — .obj meshes (Blender exports; star/cube are flat cutouts in
   the X-Z plane extruded along Y — swap Y/Z to stand them upright). Terrain
   course meshes span x,y ∈ [-10,10], flat start zone at (0,-8), obstacles up to
@@ -121,6 +132,45 @@ contact count range, NaN check). Trust those numbers, not the render.
   tips during the test and the idle speed-locked wheel brakes; two ground
   tests gave two different WRONG answers. Fix the root in the air and read
   the tire's world angular velocity instead (spin about +y = rolls +x)
+
+## Chrono demo-vehicle recipe (pychrono.vehicle — no URDF)
+
+Source of truth: the installed demos at
+`<conda env>\Lib\site-packages\pychrono\demos\vehicle\` (e.g. demo_VEH_Gator.py
+for setup, demo_VEH_SteeringController.py for the scripted driver). Working
+examples in this repo: `sims/vehicle/gator_flat.py`, `gator_track.py`.
+
+1. **Vehicle**: `veh.SetDataPath(chrono.GetChronoDataPath() + 'vehicle/')`,
+   then `veh.Gator()` / `veh.HMMWV_Full()` / `veh.UAZBUS()` etc. →
+   `SetContactMethod(NSC)`, `SetInitPosition(ChCoordsysd(loc, QUNIT))`,
+   `SetTireType(TireModelType_TMEASY)`, `SetTireStepSize(1e-3)`,
+   `Initialize()`. HMMWV additionally wants Engine/Transmission/Driveline/
+   Steering type setters (see its demo). Then
+   `GetSystem().SetCollisionSystemType(Type_BULLET)`
+2. **Terrain**: `veh.RigidTerrain(system)` + `AddPatch(mat, CSYSNORM, L, W)`
+   for flat, or the `AddPatch(mat, csys, "mesh.obj", True, 0.01, vis_bool)`
+   overload for a mesh; `terrain.Initialize()`. Patch ground body is fixed
+   automatically. Sanity-check `terrain.GetHeight()` under the spawn point
+3. **Driver (scripted, no keyboard)**: `veh.ChPathFollowerDriver(vehicle,
+   path, "name", target_speed)`; steering `SetLookAheadDistance(5)`,
+   `SetGains(0.8,0,0)`, speed `SetGains(0.4,0,0)`. Paths:
+   `veh.DoubleLaneChangePath`, `veh.StraightLinePath`, `veh.CirclePath`, or a
+   custom `chrono.ChBezierCurve(vector_ChVector3d, closed=True)` — closed
+   loops lap forever; open paths freeze the steering target at the end and
+   the vehicle circles back, so stop at the last path point
+4. **Loop** (physics 1e-3, render ~50 fps separately): get `driver.GetInputs()`
+   → `Synchronize(time, ...)` on driver/terrain/vehicle/vis →
+   `Advance(step)` on all. `EnableRealtime(True)` only when windowed
+5. **Vehicle capability check**: min turn radius = wheelbase/tan(max steer)
+   (Gator: 2.78/tan25° ≈ 6 m) — scale the course, or the loop is undrivable
+   regardless of controller. Gates that catch real failures: NaN, laps/
+   displacement, cross-track error, |roll|/|pitch|, chassis z band
+
+Blender course export (see gator_track assets): name objects
+`terrain_collision` vs `visual_*`, export OBJ with `up_axis='Z'`,
+`forward_axis='Y'` (coords carry over 1:1, no Y/Z swap), `global_scale` to fix
+size, `export_triangulated_mesh=True`, via
+`blender --background file.blend --python export_script.py`.
 
 ## PyChrono 9.0.1 API gotchas (all hit and verified this project)
 
